@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeetCode Clone - Problem</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mx-auto p-6">
+        <h2 class="text-xl font-bold">Problem ID: {{ problem_id }}</h2>
+        <div id="editor" class="border rounded-lg h-96"></div>
+        <button id="execute" class="mt-2 p-2 bg-blue-600 text-white rounded">Run Code</button>
+        <pre id="output" class="mt-2 bg-gray-200 p-2 rounded"></pre>
+    </div>
+
+    <!-- Load Monaco Editor -->
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor/min/vs/loader.js"></script>
+    <script>
+        require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor/min/vs' }});
+        require(['vs/editor/editor.main'], function() {
+            const editor = monaco.editor.create(document.getElementById('editor'), {
+                value: '# Write your Python code here\n',
+                language: 'python',
+                theme: 'vs-dark',
+                automaticLayout: true
+            });
+
+            function checkForInputFunction(code) {
+                return code.includes('input(');
+            }
+
+            async function runCode(code, inputs = "") {
+                try {
+                    const response = await fetch('/execute', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ code: code, inputs: inputs })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+
+                    const data = await response.json();
+                    return data;
+                } catch (error) {
+                    console.error('Error:', error);
+                    return { stdout: '', stderr: `Error: ${error.message}` };
+                }
+            }
+
+            document.getElementById('execute').addEventListener('click', async () => {
+                const code = editor.getValue();
+                let outputElement = document.getElementById('output');
+                outputElement.textContent = "";  // Clear previous output
+
+                const data = await runCode(code);
+
+                if (checkForInputFunction(code)) {
+                    outputElement.textContent += "Input required: ";
+
+                    // Create an input element for the user to provide input
+                    const inputElement = document.createElement('input');
+                    inputElement.className = "border rounded p-1";
+                    outputElement.appendChild(inputElement);
+                    inputElement.focus();  // Focus on the input field
+
+                    // Listen for input submission
+                    inputElement.addEventListener('keypress', async function(event) {
+                        if (event.key === 'Enter') {
+                            const userInput = inputElement.value;
+
+                            // Run the code again with the provided input
+                            const data = await runCode(code, userInput);
+
+                            // Clear previous content and display output and errors
+                            outputElement.textContent = "";
+                            outputElement.textContent += "Output:\n" + data.stdout;
+                            if (data.stderr) {
+                                outputElement.textContent += "\nErrors:\n" + data.stderr;
+                            }
+                        }
+                    });
+                } else {
+                    // If no input is required, just display the output and errors
+                    outputElement.textContent = "";
+                    outputElement.textContent += "Output:\n" + data.stdout;
+                    if (data.stderr) {
+                        outputElement.textContent += "\nErrors:\n" + data.stderr;
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
